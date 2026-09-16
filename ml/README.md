@@ -12,13 +12,32 @@ after  : torch.Tensor  # [4, H, W] float32 surface reflectance in [0, 1]
 # one shared grid (EPSG:32643, 10 m) so before[:, y, x] and after[:, y, x] are the same place
 ```
 
-Change label / feature targets come from `data/processed/<aoi>/ndvi_difference.tif`
-and the `*_valid_mask.npy` arrays. Details: `docs/DATA.md`.
+## Training datasets (Step 3.2)
+
+`ml/change_detection/dataset.py` turns supervised change-detection datasets into the
+frozen sample interface `{before [C,H,W], after [C,H,W], mask [1,H,W]}`:
+
+- **OSCD** (primary, real Sentinel-2, 4-band contract natively) - `OscdDataset`.
+  Region-level official `train.txt`/`test.txt` split, so no patch can leak between
+  training and validation locations. Unannotated regions get an honest zero mask and
+  `region_report[...]["annotated"] is False`.
+- **LEVIR-CD** (secondary, 8-bit RGB aerial imagery) - `LevirDataset`. It has no NIR:
+  R->B04, G->B03, B->B02 and the B08 channel is **zero-filled as an explicit absence
+  marker** (`channel_availability == (True, True, True, False)`). NIR is never
+  synthesized; models trained on LEVIR-CD are RGB structural-change specialists.
+
+Cropping/flip augmentation is deterministic per sample index (seeded PRNG), so any
+index always yields the same window regardless of worker count. Inspect a download:
+
+```powershell
+backend/.venv/Scripts/python.exe -m ml.change_detection.dataset --oscd-root <unzipped> --split train
+```
 
 ## Next up
 
-- `change_detection/` - Siamese U-Net trained on the aligned tensor pairs
+- `change_detection/model.py` (Step 3.3) - weight-shared Siamese U-Net over the
+  `{before, after, mask}` samples
+- `change_detection/train.py` (Step 3.4) - BCE+Dice training with Precision/Recall/F1/IoU
 - `priority/` - XGBoost priority model over NDVI/feature stack, explained with SHAP
 
-Both are added after the preprocessing contract was verified (it is: see
-`scripts/validate_satellite_pair.py` -> `RESULT: PASS`).
+The Pune Sentinel-2 pair stays held out: demo and inference only, never training data.

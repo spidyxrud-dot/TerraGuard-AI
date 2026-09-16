@@ -97,13 +97,13 @@ backend/.venv/Scripts/python.exe -m pytest backend/tests -q
 .\scripts\setup_env.ps1
 ```
 
-## Next milestone (Step 3.2)
+## Next milestone (Step 3.3)
 
-The geospatial foundation now ends in cloud-masked tensors (`app.services.cloud_mask`
-applies the SCL policy before anything reaches a model). Next: the change-detection
-dataset loaders for OSCD (primary, Sentinel-2) and LEVIR-CD (secondary) in
-`ml/change_detection/dataset.py`, all normalizing to the same
-`before [4,H,W] / after [4,H,W] / mask [1,H,W]` interface, then the weight-shared
-Siamese U-Net in `model.py`. The Pune pair stays held-out demo/inference data.
+Dataset loaders are in place (`ml/change_detection/dataset.py`): OSCD (primary,
+Sentinel-2, region-level official split) and LEVIR-CD (secondary, RGB with an
+explicitly zero-filled NIR channel) both emit `{before [C,H,W], after [C,H,W],
+mask [1,H,W]}`. Next: the weight-shared Siamese U-Net in
+`ml/change_detection/model.py` consuming exactly those samples. The Pune pair stays
+held-out demo/inference data.
 
 

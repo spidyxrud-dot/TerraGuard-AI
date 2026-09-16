@@ -136,7 +136,31 @@ Latest verified result: `RESULT: PASS` (raw before/after, spatial alignment, 14 
 artifacts incl. SCL/cloud masks, tensor contract, NDVI, cloud masking), 51/51 tests green
 (13 preprocessing + 38 cloud masking).
 
-## 8. Known limitations
+## 9. Training datasets (Step 3.2)
+
+Phase 3 trains on public supervised change-detection datasets; the Pune pair above
+stays held out for demo/inference only. Loaders live in
+`ml/change_detection/dataset.py`; every loader emits the same sample contract
+`{before [C,H,W], after [C,H,W], mask [1,H,W]}` float32 in [0, 1].
+
+| Dataset | Role | Imagery | Channels | Labels | Split |
+| --- | --- | --- | --- | --- | --- |
+| OSCD (Onera Satellite Change Detection) | primary | Sentinel-2 pairs, per-band GeoTIFFs | B02/B03/B04/B08 = the TerraGuard contract natively | human-annotated `cm.png` per region | official `train.txt` / `test.txt` (region-level -> no geographic leakage) |
+| LEVIR-CD | secondary | 8-bit RGB aerial/Google-Earth PNGs (256x256) | R->B04, G->B03, B->B02; **NIR zero-filled as an absence marker, never synthesized** | building-change `label/*.png` | official `train`/`val`/`test` folders |
+| Pune Sentinel-2 pair | held-out demo | this document, sections 1-7 | 4-band + SCL cloud mask | none (inference only) | not used in training |
+
+Inspect a download (prints layout expectations when no root is given):
+
+```powershell
+backend/.venv/Scripts/python.exe -m ml.change_detection.dataset --oscd-root <unzipped>
+```
+
+Known dataset caveats: OSCD ships one region without annotations (loader -> zero mask,
+flagged in `region_report`) and bands at native mixed resolutions (loader warps every
+band onto the 10 m reference grid in-memory); LEVIR-CD is RGB-only, so models trained
+on it detect structural change and must not be read as vegetation-sensitive.
+
+## 10. Known limitations
 
 - The SCL policy is strict by design: class 7 UNCLASSIFIED is masked (opt in with
   `--lenient-scl` / `valid_classes`), which can discard genuinely clear pixels in rare
