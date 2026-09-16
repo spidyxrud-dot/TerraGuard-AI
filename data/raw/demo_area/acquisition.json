@@ -1,0 +1,204 @@
+{
+  "source": "Element 84 Earth Search STAC (sentinel-2-l2a) / AWS Open Data sentinel-cogs",
+  "stac_endpoint": "https://earth-search.aws.element84.com/v1/search",
+  "collection": "sentinel-2-l2a",
+  "license_note": "Copernicus Sentinel data - free and open (Copernicus Programme).",
+  "aoi": {
+    "centre_lon": 73.79,
+    "centre_lat": 18.53,
+    "edge_m": 10240,
+    "resolution_m": 10,
+    "size_px": 1024,
+    "bounds_utm": [
+      367160,
+      2044130,
+      377400,
+      2054370
+    ],
+    "bounds_wgs84": [
+      73.74109724391916,
+      18.483392278333305,
+      73.83874976453787,
+      18.576543180900064
+    ],
+    "analysis_epsg": 32643
+  },
+  "bands": {
+    "B02": "blue",
+    "B03": "green",
+    "B04": "red",
+    "B08": "nir"
+  },
+  "aux_bands": {
+    "SCL": "scl"
+  },
+  "search_windows": {
+    "before": [
+      "2023-12-01",
+      "2023-12-31"
+    ],
+    "after": [
+      "2024-05-01",
+      "2024-06-20"
+    ]
+  },
+  "max_cloud_percent": 15.0,
+  "before": {
+    "item_id": "S2A_43QCA_20231215_0_L2A",
+    "acquisition_date": "2023-12-15",
+    "datetime": "2023-12-15T05:43:52.208000Z",
+    "cloud_cover_percent": 0.0081,
+    "mgrs_grid": "MGRS-43QCA",
+    "bands": {
+      "B02": {
+        "asset": "blue",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2023/12/S2A_43QCA_20231215_0_L2A/B02.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050625,
+          "min": 82.0,
+          "max": 11696.0,
+          "mean": 672.886
+        }
+      },
+      "B03": {
+        "asset": "green",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2023/12/S2A_43QCA_20231215_0_L2A/B03.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050625,
+          "min": 11.0,
+          "max": 11248.0,
+          "mean": 826.994
+        }
+      },
+      "B04": {
+        "asset": "red",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2023/12/S2A_43QCA_20231215_0_L2A/B04.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050625,
+          "min": 1.0,
+          "max": 18616.0,
+          "mean": 868.479
+        }
+      },
+      "B08": {
+        "asset": "nir",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2023/12/S2A_43QCA_20231215_0_L2A/B08.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050625,
+          "min": 142.0,
+          "max": 17177.0,
+          "mean": 1912.203
+        }
+      }
+    },
+    "aux": {
+      "SCL": {
+        "asset": "scl",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2023/12/S2A_43QCA_20231215_0_L2A/SCL.tif",
+        "dtype": "uint8",
+        "nodata": 0.0,
+        "resolution_m": 20,
+        "window": {
+          "col_off": 3358,
+          "row_off": 2281,
+          "width": 513,
+          "height": 513
+        },
+        "note": "auxiliary asset for future per-pixel cloud masking; not consumed yet"
+      }
+    },
+    "window": {
+      "col_off": 6716,
+      "row_off": 4563,
+      "width": 1025,
+      "height": 1025
+    }
+  },
+  "after": {
+    "item_id": "S2A_43QCA_20240503_0_L2A",
+    "acquisition_date": "2024-05-03",
+    "datetime": "2024-05-03T05:43:59.190000Z",
+    "cloud_cover_percent": 0.0002,
+    "mgrs_grid": "MGRS-43QCA",
+    "bands": {
+      "B02": {
+        "asset": "blue",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2024/5/S2A_43QCA_20240503_0_L2A/B02.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050617,
+          "min": 1.0,
+          "max": 20104.0,
+          "mean": 869.922
+        }
+      },
+      "B03": {
+        "asset": "green",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2024/5/S2A_43QCA_20240503_0_L2A/B03.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050620,
+          "min": 1.0,
+          "max": 18824.0,
+          "mean": 1158.401
+        }
+      },
+      "B04": {
+        "asset": "red",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2024/5/S2A_43QCA_20240503_0_L2A/B04.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050623,
+          "min": 1.0,
+          "max": 15928.0,
+          "mean": 1365.442
+        }
+      },
+      "B08": {
+        "asset": "nir",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2024/5/S2A_43QCA_20240503_0_L2A/B08.tif",
+        "dtype": "uint16",
+        "nodata": 0.0,
+        "stats": {
+          "valid_pixels": 1050620,
+          "min": 1.0,
+          "max": 15304.0,
+          "mean": 2407.074
+        }
+      }
+    },
+    "aux": {
+      "SCL": {
+        "asset": "scl",
+        "href": "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/43/Q/CA/2024/5/S2A_43QCA_20240503_0_L2A/SCL.tif",
+        "dtype": "uint8",
+        "nodata": 0.0,
+        "resolution_m": 20,
+        "window": {
+          "col_off": 3358,
+          "row_off": 2281,
+          "width": 513,
+          "height": 513
+        },
+        "note": "auxiliary asset for future per-pixel cloud masking; not consumed yet"
+      }
+    },
+    "window": {
+      "col_off": 6716,
+      "row_off": 4563,
+      "width": 1025,
+      "height": 1025
+    }
+  }
+}

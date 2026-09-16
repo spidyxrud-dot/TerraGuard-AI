@@ -9,14 +9,21 @@ node_modules/
 frontend/dist/
 
 # Generated geospatial outputs
-data/processed/*
-data/predictions/*
+data/processed/**
+data/predictions/**
+data/demo/**
+
+# Satellite imagery is re-fetchable, not versioned (see docs/DATA.md)
+data/raw/**/*.tif
+data/raw/**/*.tiff
+!data/processed/.gitkeep
+!data/predictions/.gitkeep
+!data/demo/.gitkeep
+
 models/*.pth
 models/*.json
 
 # Transient runtime artifacts
 *.log
 backend/uvicorn*.log
-data/demo/*.tif
-data/raw/*.tif
 
