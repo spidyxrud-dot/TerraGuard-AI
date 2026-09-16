@@ -26,6 +26,19 @@ from pathlib import Path
 import numpy as np
 import rasterio
 
+from app.services.cloud_mask import (
+    SCL_BAND,
+    SCL_CLASSES,
+    SCL_MASKED_CLASSES,
+    SCL_VALID_CLASSES,
+    SCL_VALID_CLASSES_LENIENT,
+    CloudMask,
+    load_scl,
+    mask_observation,
+    pair_valid_mask,
+    scl_mask_report,
+    write_scl_raster,
+)
 from app.services.ndvi import (
     CHANGE_THRESHOLDS,
     NDVI_FORMULA,
@@ -55,8 +68,13 @@ BAND_ORDER: tuple[str, ...] = ("B02", "B03", "B04", "B08")
 BAND_ROLES: dict[str, str] = {"B02": "blue", "B03": "green", "B04": "red", "B08": "nir"}
 RED_BAND = "B04"
 NIR_BAND = "B08"
-AUX_BANDS: tuple[str, ...] = ("SCL",)
-"""Auxiliary raw assets (not tensor channels); SCL awaits per-pixel cloud masking."""
+AUX_BANDS: tuple[str, ...] = (SCL_BAND,)
+"""Auxiliary raw assets (not tensor channels) staged next to the bands.
+
+``SCL`` drives the per-pixel cloud / invalid masking in ``app.services.cloud_mask``. It is
+optional: when it is absent (OSCD, LEVIR-CD, non-Sentinel sources) masking degrades to the
+band nodata and footprint coverage rules only.
+"""
 
 REFLECTANCE_SCALE = 10_000.0
 """Sentinel-2 L2A digital numbers are surface reflectance x 10000."""
@@ -207,6 +225,36 @@ def load_sentinel_pair(raw_dir: str | Path = DEFAULT_RAW_DIR) -> tuple[Observati
     return observations[0], observations[1]
 
 
+def aux_scl_checks(observation: Observation) -> dict | None:
+    """Sanity-check the raw SCL asset of an observation (``None`` when it has none).
+
+    The SCL band decides which pixels reach the model, so a corrupt or unexpected SCL band
+    must fail validation loudly rather than silently mask nonsense.
+    """
+    raster = observation.aux.get(SCL_BAND)
+    if raster is None:
+        return None
+
+    checks: dict[str, bool] = {"scl_present": True, "scl_readable": False,
+                               "scl_classes_known": False, "scl_has_usable_pixels": False}
+    details: dict = {"path": str(raster.path), "resolution": list(raster.resolution),
+                     "shape": [int(raster.shape[0]), int(raster.shape[1])]}
+    try:
+        classes = load_scl(raster.path)
+    except Exception as error:  # pragma: no cover - depends on corrupt input
+        details["error"] = f"{type(error).__name__}: {error}"
+        return {"checks": checks, "details": details}
+
+    report = scl_mask_report(classes)
+    checks["scl_readable"] = True
+    checks["scl_classes_known"] = not report["unknown_classes"]
+    checks["scl_has_usable_pixels"] = report["usable_pixels"] > 0
+    details.update({key: report[key] for key in ("usable_pixels", "masked_pixels", "usable_fraction",
+                                                 "masked_fraction", "unknown_classes", "histogram",
+                                                 "mask_reasons")})
+    return {"checks": checks, "details": details}
+
+
 def validate_raster(observation: Observation) -> ValidationResult:
     """Validate one observation: readability, bands, CRS, resolution, values, nodata."""
     result = ValidationResult(label=observation.label)
@@ -269,6 +317,11 @@ def validate_raster(observation: Observation) -> ValidationResult:
     result.checks["mostly_valid_pixels"] = bool(valid_fractions) and min(valid_fractions) >= 0.99
 
     first = next(iter(observation.bands.values()))
+    scl = aux_scl_checks(observation)
+    if scl is not None:
+        details["scl"] = scl["details"]
+        result.checks.update(scl["checks"])
+
     details.update({
         "crs": first.crs,
         "resolution": list(first.resolution),
@@ -409,7 +462,10 @@ class AlignedObservation:
 
     @property
     def valid(self) -> np.ndarray:
-        """``[H, W]`` pixels valid in every band: safe to use for change detection."""
+        """``[H, W]`` pixels valid in every band: safe to use for change detection.
+
+        Already includes the SCL cloud / invalid-pixel policy applied in :func:`align_rasters`.
+        """
         mask = np.ones((self.grid.height, self.grid.width), dtype=bool)
         for band_mask in self.band_valid.values():
             mask &= band_mask
@@ -428,14 +484,25 @@ class AlignedObservation:
 
 
 def align_rasters(observation: Observation, grid: RasterGrid,
-                  resampling: str = "bilinear") -> AlignedObservation:
+                  resampling: str = "bilinear", cloud: CloudMask | None = None,
+                  valid_classes: tuple[int, ...] = SCL_VALID_CLASSES) -> AlignedObservation:
     """Resample every band of ``observation`` onto ``grid`` and normalize to reflectance.
 
     The same ``grid`` for before and after guarantees that ``data[:, row, col]``
     describes the same geographic location in both images, which is what makes a
     per-pixel comparison (and the Siamese U-Net input) meaningful.
+
+    A pixel is kept only when it is valid in the band itself (nodata, non-finite, negative),
+    covered by the source footprint, *and* classified as usable surface by SCL. Passing a
+    pre-computed ``cloud`` mask reuses it instead of reading the SCL band again; when the
+    observation has no SCL the mask is a no-op.
     """
     from rasterio.enums import Resampling
+
+    cloud_mask = cloud if cloud is not None else mask_observation(observation, grid, valid_classes)
+    if cloud_mask.valid.shape != (grid.height, grid.width):
+        raise ValueError(f"cloud mask shape {cloud_mask.valid.shape} does not match grid "
+                         f"{(grid.height, grid.width)}")
 
     method = Resampling[resampling]
     band_arrays: list[np.ndarray] = []
@@ -446,7 +513,7 @@ def align_rasters(observation: Observation, grid: RasterGrid,
         resampled = resample_to_grid(raster.path, grid, resampling=method)
         coverage = resample_mask_to_grid(raster.path, grid)
         cleaned, in_band_valid = handle_nodata(resampled, nodata=raster.profile["nodata"])
-        mask = in_band_valid & coverage
+        mask = in_band_valid & coverage & cloud_mask.valid
         cleaned = np.where(mask, cleaned, np.float32(np.nan))
         band_arrays.append(normalize_bands(cleaned))
         band_valid[band] = mask
@@ -512,12 +579,14 @@ def _observation_metadata(observation: Observation, aligned: AlignedObservation)
 def prepare_pair(raw_dir: str | Path = DEFAULT_RAW_DIR, processed_dir: str | Path = DEFAULT_PROCESSED_DIR,
                  resolution: float = DEFAULT_RESOLUTION_M, crs: str | None = None,
                  resampling: str = "bilinear", validate: bool = True,
-                 build_tensors: bool = True) -> dict:
+                 build_tensors: bool = True,
+                 valid_classes: tuple[int, ...] = SCL_VALID_CLASSES) -> dict:
     """Turn a raw Sentinel-2 band pair into the frozen input contract for the AI stage.
 
-    Writes ``before.tif`` / ``after.tif`` (4-band reflectance), ``*.npy`` arrays,
-    validity masks, the NDVI rasters and a ``metadata.json`` provenance record, and
-    returns that metadata.
+    Pipeline: validate -> common grid -> SCL cloud / invalid masking -> resample -> normalize
+    to reflectance -> NDVI. Writes ``before.tif`` / ``after.tif`` (4-band reflectance), the
+    ``*.npy`` arrays, validity masks (band + cloud), the SCL rasters, the NDVI rasters and a
+    ``metadata.json`` provenance record, and returns that metadata.
     """
     raw_dir = Path(raw_dir)
     processed_dir = Path(processed_dir)
@@ -537,9 +606,13 @@ def prepare_pair(raw_dir: str | Path = DEFAULT_RAW_DIR, processed_dir: str | Pat
             raise ValueError(f"raw Sentinel-2 pair failed validation: {failed}")
 
     grid = common_grid([*before.paths, *after.paths], resolution=resolution, crs=crs)
-    aligned_before = align_rasters(before, grid, resampling=resampling)
-    aligned_after = align_rasters(after, grid, resampling=resampling)
+    cloud_before = mask_observation(before, grid, valid_classes)
+    cloud_after = mask_observation(after, grid, valid_classes)
+    aligned_before = align_rasters(before, grid, resampling=resampling, cloud=cloud_before)
+    aligned_after = align_rasters(after, grid, resampling=resampling, cloud=cloud_after)
     shared_valid = aligned_before.valid & aligned_after.valid
+    cloud_valid = pair_valid_mask(cloud_before, cloud_after)
+    cloud_masked_pixels = int((~cloud_valid).sum())
 
     channel = {band: index for index, band in enumerate(BAND_ORDER)}
     ndvi_before = calculate_ndvi(aligned_before.data[channel[NIR_BAND]],
@@ -556,6 +629,9 @@ def prepare_pair(raw_dir: str | Path = DEFAULT_RAW_DIR, processed_dir: str | Pat
         "before_valid_mask_npy": processed_dir / "before_valid_mask.npy",
         "after_valid_mask_npy": processed_dir / "after_valid_mask.npy",
         "valid_mask_npy": processed_dir / "valid_mask.npy",
+        "cloud_valid_mask_npy": processed_dir / "cloud_valid_mask.npy",
+        "scl_before_tif": processed_dir / "scl_before.tif",
+        "scl_after_tif": processed_dir / "scl_after.tif",
         "ndvi_before_tif": processed_dir / "ndvi_before.tif",
         "ndvi_after_tif": processed_dir / "ndvi_after.tif",
         "ndvi_difference_tif": processed_dir / "ndvi_difference.tif",
@@ -568,6 +644,11 @@ def prepare_pair(raw_dir: str | Path = DEFAULT_RAW_DIR, processed_dir: str | Pat
     np.save(outputs["before_valid_mask_npy"], aligned_before.valid)
     np.save(outputs["after_valid_mask_npy"], aligned_after.valid)
     np.save(outputs["valid_mask_npy"], shared_valid)
+    np.save(outputs["cloud_valid_mask_npy"], cloud_valid)
+    write_scl_raster(outputs["scl_before_tif"], cloud_before.class_array, grid,
+                     f"SCL {before.date or 'before'}")
+    write_scl_raster(outputs["scl_after_tif"], cloud_after.class_array, grid,
+                     f"SCL {after.date or 'after'}")
     write_ndvi_raster(outputs["ndvi_before_tif"], ndvi_before, grid, f"NDVI {before.date or 'before'}")
     write_ndvi_raster(outputs["ndvi_after_tif"], ndvi_after, grid, f"NDVI {after.date or 'after'}")
     write_ndvi_raster(outputs["ndvi_difference_tif"], ndvi_delta, grid,
@@ -617,6 +698,23 @@ def prepare_pair(raw_dir: str | Path = DEFAULT_RAW_DIR, processed_dir: str | Pat
                     "arrays are authoritative",
             "shared_valid_fraction": round(float(shared_valid.mean()), 6),
         },
+        "cloud_mask": {
+            "module": "backend/app/services/cloud_mask.py::mask_observation",
+            "policy": "class 4 VEGETATION, 5 NOT_VEGETATED, 6 WATER are usable surface; "
+                      "0 NO_DATA, 1 SATURATED, 2 DARK_AREA_OR_SHADOW, 3 CLOUD_SHADOW, "
+                      "7 UNCLASSIFIED, 8/9 CLOUD, 10 THIN_CIRRUS, 11 SNOW_OR_ICE are masked",
+            "valid_classes": list(valid_classes),
+            "masked_classes": list(SCL_MASKED_CLASSES),
+            "scl_classes": {str(code): name for code, name in SCL_CLASSES.items()},
+            "applied": bool(cloud_before.available or cloud_after.available),
+            "shared_valid_fraction": round(float(cloud_valid.mean()), 6),
+            "masked_pixels": cloud_masked_pixels,
+            "masked_fraction": round(cloud_masked_pixels / cloud_valid.size, 6),
+            "before": cloud_before.to_dict(),
+            "after": cloud_after.to_dict(),
+            "note": "the '_valid_mask' arrays and the tensors already exclude these pixels; "
+                    "masked pixels are NaN in memory and nodata on disk",
+        },
         "observations": {
             "before": _observation_metadata(before, aligned_before),
             "after": _observation_metadata(after, aligned_after),
@@ -647,11 +745,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--resampling", default="bilinear",
                         choices=["nearest", "bilinear", "cubic", "cubic_spline", "lanczos", "average"])
     parser.add_argument("--no-validate", action="store_true", help="skip hard validation failures")
+    parser.add_argument("--lenient-scl", action="store_true",
+                        help="also treat SCL class 7 (UNCLASSIFIED) as usable surface")
     args = parser.parse_args(argv)
 
     metadata = prepare_pair(raw_dir=args.raw, processed_dir=args.processed, resolution=args.resolution,
-                            crs=args.crs, resampling=args.resampling, validate=not args.no_validate)
+                            crs=args.crs, resampling=args.resampling, validate=not args.no_validate,
+                            valid_classes=(SCL_VALID_CLASSES_LENIENT if args.lenient_scl
+                                           else SCL_VALID_CLASSES))
 
+    cloud = metadata["cloud_mask"]
     print(f"Processed pair written to {args.processed}")
     print(f"  crs          : {metadata['crs']}")
     print(f"  grid         : {metadata['width']}x{metadata['height']} @ {metadata['resolution_m']} m")
@@ -660,7 +763,11 @@ def main(argv: list[str] | None = None) -> int:
           f"({metadata['observations']['before']['item_id']})")
     print(f"  after        : {metadata['observations']['after']['acquisition_date']} "
           f"({metadata['observations']['after']['item_id']})")
-    print(f"  valid pixels : {metadata['nodata_policy']['shared_valid_fraction']:.4%}")
+    print(f"  cloud mask   : {'applied' if cloud['applied'] else 'no SCL asset'} | "
+          f"valid classes {cloud['valid_classes']} | "
+          f"{cloud['masked_pixels']} px masked ({cloud['masked_fraction']:.4%})")
+    print(f"  valid pixels : {metadata['nodata_policy']['shared_valid_fraction']:.4%} "
+          f"(band + footprint + cloud)")
     print(f"  NDVI delta   : mean {metadata['ndvi']['difference']['mean']}, "
           f"browning>0.2 {metadata['ndvi']['change_areas']['loss_at_0.2_fraction']:.2%}, "
           f"greening>0.2 {metadata['ndvi']['change_areas']['gain_at_0.2_fraction']:.2%}")

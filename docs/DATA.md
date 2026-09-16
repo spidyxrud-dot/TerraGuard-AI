@@ -73,20 +73,29 @@ cloud filter.
 data/
 ├── raw/demo_area/
 │   ├── acquisition.json          provenance: scene ids, dates, cloud, band URLs, windows
-│   ├── before/{B02,B03,B04,B08,SCL}.tif    raw DN, unmodified, 1025x1025 @ 10 m
-│   └── after/{B02,B03,B04,B08,SCL}.tif
+│   ├── before/{B02,B03,B04,B08}.tif   raw DN, unmodified, 1025x1025 @ 10 m
+│   │         └── SCL.tif              raw class codes, 513x513 @ 20 m (nearest-resampled in pipeline)
+│   └── after/  (same layout)
 └── processed/demo_area/          written by app.services.preprocessing.prepare_pair
     ├── before.tif  after.tif     4-band float32 reflectance, nodata=0
     ├── before.npy  after.npy     [4, H, W] float32 arrays (same values as the tifs)
-    ├── before_valid_mask.npy     [H, W] bool
+    ├── before_valid_mask.npy     [H, W] bool (band nodata + footprint + SCL)
     ├── after_valid_mask.npy      [H, W] bool
     ├── valid_mask.npy            [H, W] bool = before AND after
+    ├── cloud_valid_mask.npy      [H, W] bool = usable SCL surface in both dates
+    ├── scl_before.tif  scl_after.tif   uint8 SCL classes on the analysis grid, nodata=0
     ├── ndvi_before.tif  ndvi_after.tif  ndvi_difference.tif   float32, nodata=NaN
-    └── metadata.json             grid, normalization, statistics, hashes
+    └── metadata.json             grid, normalization, cloud policy, statistics, hashes
 ```
 
-`SCL.tif` (scene classification: cloud, shadow, water...) is fetched for future
-per-pixel cloud masking. It is **not** consumed by the current pipeline.
+`SCL.tif` (Sentinel-2 L2A scene classification) drives the per-pixel cloud / invalid
+masking in `app.services.cloud_mask`: only classes 4 VEGETATION, 5 NOT_VEGETATED and
+6 WATER count as usable surface; NO_DATA, saturated, dark-area/cast-shadow, cloud shadow,
+unclassified, medium/high clouds, thin cirrus and snow/ice are masked. The 20 m SCL band
+is resampled onto the 10 m grid with nearest neighbour (class codes are labels, never
+averaged), and a pixel must be usable in **both** acquisitions to survive into the
+comparison. Masked pixels are NaN in memory, `0` on disk, excluded from NDVI, and
+recorded with their class histogram in `metadata.json` under `cloud_mask`.
 
 ## 6. Frozen interface for the AI stage
 
@@ -106,10 +115,10 @@ Rules that the rest of the project can rely on:
    imagery arrived in.
 2. **Fixed normalization.** `reflectance = clip(DN / 10000, 0, 1)`. No per-image
    statistics, so the two dates stay directly comparable and results are reproducible.
-3. **Explicit validity.** Invalid pixels (nodata, non-finite, sub-zero) are NaN inside
-   the pipeline; on disk they are written as `0` and the authoritative information is in
-   the `*_valid_mask.npy` arrays. Tensors are NaN-free (`convert_to_tensor` fills with 0)
-   because a network cannot consume NaN.
+3. **Explicit validity.** Invalid pixels (nodata, non-finite, sub-zero, cloud / shadow /
+   cirrus / unclassified per SCL) are NaN inside the pipeline; on disk they are written as
+   `0` and the authoritative information is in the `*_valid_mask.npy` arrays. Tensors are
+   NaN-free (`convert_to_tensor` fills with 0) because a network cannot consume NaN.
 4. **Provenance.** `metadata.json` carries the scene ids, dates, cloud cover, grid,
    array/sha256 hashes, NDVI statistics and the validation results of the run.
 
@@ -123,13 +132,15 @@ backend/.venv/Scripts/python.exe scripts/validate_satellite_pair.py
 backend/.venv/Scripts/python.exe -m pytest backend/tests -q
 ```
 
-Latest verified result: `RESULT: PASS` (raw before/after, spatial alignment, 11 processed
-artifacts, tensor contract, NDVI), 13/13 tests green.
+Latest verified result: `RESULT: PASS` (raw before/after, spatial alignment, 14 processed
+artifacts incl. SCL/cloud masks, tensor contract, NDVI, cloud masking), 51/51 tests green
+(13 preprocessing + 38 cloud masking).
 
 ## 8. Known limitations
 
-- Cloud masking is currently scene-level (scene selection filters cloud cover) rather
-  than per-pixel; `SCL.tif` is staged for the next step.
+- The SCL policy is strict by design: class 7 UNCLASSIFIED is masked (opt in with
+  `--lenient-scl` / `valid_classes`), which can discard genuinely clear pixels in rare
+  sen2cor failure pockets.
 - The pair is same-tile and same-platform, so the cross-CRS / cross-resolution alignment
   logic is exercised by synthetic tests rather than by this pair.
 - No atmospheric normalization between dates beyond L2A surface reflectance: residual

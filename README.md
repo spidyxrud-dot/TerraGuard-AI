@@ -97,10 +97,13 @@ backend/.venv/Scripts/python.exe -m pytest backend/tests -q
 .\scripts\setup_env.ps1
 ```
 
-## Next milestone (Step 3)
+## Next milestone (Step 3.2)
 
-Build the AI stage on the frozen interface from `docs/DATA.md`: per-pixel cloud
-masking from the staged `SCL` band, then the Siamese U-Net data pipeline and
-model in `ml/change_detection/`, consuming `before`/`after` tensors only.
+The geospatial foundation now ends in cloud-masked tensors (`app.services.cloud_mask`
+applies the SCL policy before anything reaches a model). Next: the change-detection
+dataset loaders for OSCD (primary, Sentinel-2) and LEVIR-CD (secondary) in
+`ml/change_detection/dataset.py`, all normalizing to the same
+`before [4,H,W] / after [4,H,W] / mask [1,H,W]` interface, then the weight-shared
+Siamese U-Net in `model.py`. The Pune pair stays held-out demo/inference data.
 
 

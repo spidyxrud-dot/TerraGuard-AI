@@ -44,6 +44,7 @@ from app.services.preprocessing import (  # noqa: E402  (import after sys.path b
     prepare_pair,
     validate_raster,
 )
+from app.services.cloud_mask import SCL_CLASSES  # noqa: E402  (import after sys.path bootstrap)
 from app.utils.geo import common_grid  # noqa: E402
 
 WIDTH = 78
@@ -239,6 +240,73 @@ def print_tensor_block(metadata: dict, before: np.ndarray, after: np.ndarray) ->
     ]
 
 
+def print_cloud_block(metadata: dict, processed_dir: Path) -> list[tuple[bool, str]]:
+    """Validate the SCL cloud / invalid-pixel masking applied to both observations."""
+    cloud = metadata.get("cloud_mask")
+    print("\nCLOUD MASK (Sentinel-2 L2A SCL)")
+    if not cloud:
+        print_check(False, "cloud_mask metadata missing from metadata.json")
+        return [(False, "metadata contains no cloud_mask block")]
+
+    print(f"  policy      : usable classes {cloud['valid_classes']}; "
+          f"masked {cloud['masked_classes']}")
+    print(f"  grid        : {cloud['before']['pixels']} px, "
+          f"{cloud['masked_pixels']} masked in either observation ({cloud['masked_fraction']:.4%})")
+    for label in ("before", "after"):
+        entry = cloud[label]
+        report = entry["report"]
+        if not entry["available"]:
+            print(f"  {label:12s}: no SCL asset - no pixels masked by cloud policy")
+            continue
+        print(f"  {label:12s}: usable {report['usable_fraction']:.4%}, "
+              f"masked {report['masked_pixels']} px ({report['masked_fraction']:.4%})")
+        for reason, detail in report["mask_reasons"].items():
+            print(f"                {reason:24s} {detail['pixels']:>7} px "
+                  f"({detail['fraction_of_image']:.4%}) classes {detail['classes']}")
+
+    artifacts = {
+        "cloud_valid_mask.npy": "combined cloud validity",
+        "scl_before.tif": "SCL classes on the analysis grid (before)",
+        "scl_after.tif": "SCL classes on the analysis grid (after)",
+    }
+    checks: list[tuple[bool, str]] = []
+    for name, description in artifacts.items():
+        path = processed_dir / name
+        checks.append((path.is_file() and path.stat().st_size > 0, f"{name} - {description}"))
+
+    try:
+        cloud_valid = np.load(processed_dir / "cloud_valid_mask.npy")
+        shared_valid = np.load(processed_dir / "valid_mask.npy")
+        before_valid = np.load(processed_dir / "before_valid_mask.npy")
+        after_valid = np.load(processed_dir / "after_valid_mask.npy")
+    except Exception as error:  # pragma: no cover - depends on missing artifacts
+        return checks + [(False, f"validity masks unreadable: {error}")]
+
+    checks.append((cloud_valid.shape == shared_valid.shape,
+                   "cloud validity mask matches the grid shape"))
+    checks.append((bool(np.array_equal(shared_valid, before_valid & after_valid)),
+                   "shared validity mask equals before AND after band masks"))
+    mask_applied = bool(np.all(shared_valid <= cloud_valid))
+    checks.append((mask_applied, "band validity is a subset of cloud validity (mask enforced)"))
+    checks.append((float(cloud_valid.mean()) >= 0.5,
+                   f"usable in both acquisitions: {float(cloud_valid.mean()):.4%}"))
+
+    for path in ("scl_before.tif", "scl_after.tif"):
+        with rasterio.open(processed_dir / path) as src:
+            classes = src.read(1, masked=False)
+            checks.append((src.count == 1 and src.dtypes[0] == "uint8",
+                           f"{path} is a single uint8 class raster"))
+            checks.append((tuple(classes.shape) == (metadata["height"], metadata["width"]),
+                           f"{path} matches the grid ({metadata['width']}x{metadata['height']})"))
+            present = {int(code) for code in np.unique(classes)}
+            checks.append((present <= set(SCL_CLASSES),
+                           f"{path} carries only known SCL classes ({sorted(present)})"))
+
+    checks.append((metadata["cloud_mask"]["policy"] and metadata["cloud_mask"]["module"],
+                   "masking policy recorded in metadata"))
+    return checks
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="TerraGuard AI - Sentinel-2 pair validation")
     parser.add_argument("--raw", type=Path, default=DEFAULT_RAW_DIR)
@@ -288,6 +356,11 @@ def main(argv: list[str] | None = None) -> int:
     for ok, text in checks:
         print_check(ok, text)
     failures.extend(text for ok, text in checks if not ok)
+
+    cloud_checks = print_cloud_block(metadata, args.processed)
+    for ok, text in cloud_checks:
+        print_check(ok, text)
+    failures.extend(text for ok, text in cloud_checks if not ok)
 
     before_array = np.load(args.processed / "before.npy")
     after_array = np.load(args.processed / "after.npy")
