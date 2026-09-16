@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.env
+
+# Node
+node_modules/
+frontend/dist/
+
+# Generated geospatial outputs
+data/processed/*
+data/predictions/*
+models/*.pth
+models/*.json
+
+# Transient runtime artifacts
+*.log
+backend/uvicorn*.log
+data/demo/*.tif
+data/raw/*.tif
+

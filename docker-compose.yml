@@ -1,0 +1,14 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: terraguard
+      POSTGRES_USER: terraguard
+      POSTGRES_PASSWORD: terraguard
+    ports:
+      - "5432:5432"
+    volumes:
+      - terraguard-postgres:/var/lib/postgresql/data
+
+volumes:
+  terraguard-postgres:
