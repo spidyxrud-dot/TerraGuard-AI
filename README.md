@@ -97,13 +97,14 @@ backend/.venv/Scripts/python.exe -m pytest backend/tests -q
 .\scripts\setup_env.ps1
 ```
 
-## Next milestone (Step 3.3)
+## Next milestone (Step 3.4)
 
-Dataset loaders are in place (`ml/change_detection/dataset.py`): OSCD (primary,
-Sentinel-2, region-level official split) and LEVIR-CD (secondary, RGB with an
-explicitly zero-filled NIR channel) both emit `{before [C,H,W], after [C,H,W],
-mask [1,H,W]}`. Next: the weight-shared Siamese U-Net in
-`ml/change_detection/model.py` consuming exactly those samples. The Pune pair stays
-held-out demo/inference data.
+The weight-shared Siamese U-Net is in place (`ml/change_detection/model.py`): encoder
+applied to both dates, |before−after| fusion, U-Net decoder with bi-temporal skips,
+logits `[B,1,H,W]`, internal padding so the odd 1025x1025 Pune grid flows through
+unmodified. Next: `ml/change_detection/train.py` - BCE+Dice loss, Precision/Recall/
+F1/IoU tracking, location-level validation, best checkpoint to
+`models/siamese_unet.pth` (+ `.json` metadata). The Pune pair stays held-out
+demo/inference data.
 
 

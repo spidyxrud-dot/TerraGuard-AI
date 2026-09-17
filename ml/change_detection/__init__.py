@@ -24,12 +24,18 @@ _DEFERRED = (
     "normalize_reflectance",
     "oscd_split_regions",
     "read_change_mask",
+    "SiameseUNet",
+    "SiameseUNetConfig",
 )
 
 __all__ = list(_DEFERRED)
 
 
 def __getattr__(name: str) -> Any:
+    if name in ("SiameseUNet", "SiameseUNetConfig"):
+        from ml.change_detection import model
+
+        return getattr(model, name)
     if name in _DEFERRED:
         from ml.change_detection import dataset
 

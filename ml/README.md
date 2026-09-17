@@ -35,9 +35,38 @@ backend/.venv/Scripts/python.exe -m ml.change_detection.dataset --oscd-root <unz
 
 ## Next up
 
-- `change_detection/model.py` (Step 3.3) - weight-shared Siamese U-Net over the
-  `{before, after, mask}` samples
-- `change_detection/train.py` (Step 3.4) - BCE+Dice training with Precision/Recall/F1/IoU
+- `change_detection/train.py` (Step 3.4) - BCE+Dice training with Precision/Recall/F1/IoU,
+  location-level validation, best checkpoint to `models/siamese_unet.pth`
 - `priority/` - XGBoost priority model over NDVI/feature stack, explained with SHAP
+
+## Siamese U-Net (Step 3.3)
+
+`ml/change_detection/model.py` - `SiameseUNet(SiameseUNetConfig)`:
+
+```text
+before [B,C,H,W] ─┐                    C = 4 (B02/B03/B04/B08) or 3 (LEVIR RGB)
+                   ├─► SAME encoder ─►  per-date feature pyramids (weights shared)
+after  [B,C,H,W] ─┘
+      bottleneck: concat(before, after, |before - after|) -> fusion
+      U-Net decoder, skips = concat(before_feats, after_feats)
+      1x1 head -> change logits [B,1,H,W]
+```
+
+- **Siamese by construction**: one encoder module applied to both dates (verified by a
+  forward-hook test that counts encoder invocations: exactly `2 x depth` per forward).
+- **Any spatial size >= 2^depth works**: the model reflect-pads internally to a multiple
+  of `2^depth` and crops the output back - required because the Pune inference grid is
+  1025 x 1025 (odd). No manual tiling/padding at inference time.
+- `forward` returns raw logits; `probability()` and `change_mask(threshold)` keep the
+  decision threshold explicit and out of the graph.
+
+```python
+from ml.change_detection import SiameseUNet, SiameseUNetConfig
+
+model = SiameseUNet(SiameseUNetConfig(in_channels=4, base_channels=16, depth=4))
+logits = model(before, after)              # [B, 1, H, W]
+probability = model.probability(logits)    # [B, 1, H, W] in [0, 1]
+mask = model.change_mask(logits, 0.5)      # [B, 1, H, W] bool
+```
 
 The Pune Sentinel-2 pair stays held out: demo and inference only, never training data.
