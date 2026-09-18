@@ -1,0 +1,193 @@
+{
+  "artifact": "terraguard.ai/priority_xgboost",
+  "created_at": "2026-09-18T05:30:30Z",
+  "model": {
+    "type": "XGBoostClassifier",
+    "framework": "xgboost",
+    "config": {
+      "max_depth": 4,
+      "n_estimators": 120,
+      "learning_rate": 0.08,
+      "subsample": 0.85,
+      "colsample_bytree": 0.85,
+      "min_child_weight": 1.0,
+      "gamma": 0.1,
+      "objective": "multi:softprob",
+      "num_class": 3,
+      "eval_metric": "mlogloss",
+      "random_state": 42
+    },
+    "feature_names": [
+      "changed_area_ha",
+      "change_fraction_of_valid",
+      "ndvi_before_mean",
+      "ndvi_after_mean",
+      "ndvi_diff_mean",
+      "change_ndvi_before_mean",
+      "change_ndvi_after_mean",
+      "change_ndvi_diff_mean",
+      "change_ndvi_diff_std",
+      "veg_loss_ha_01",
+      "veg_loss_ha_02",
+      "veg_loss_ha_03",
+      "veg_gain_ha_02",
+      "veg_loss_fraction",
+      "patch_count",
+      "mean_patch_area_ha",
+      "max_patch_area_ha",
+      "patch_density_per_km2",
+      "large_patch_count",
+      "delta_b02_mean",
+      "delta_b03_mean",
+      "delta_b04_mean",
+      "delta_b08_mean",
+      "brightness_diff_mean",
+      "scl_veg_loss_ha"
+    ],
+    "num_features": 25,
+    "classes": [
+      "LOW",
+      "MEDIUM",
+      "HIGH"
+    ],
+    "class_mapping": {
+      "0": "LOW",
+      "1": "MEDIUM",
+      "2": "HIGH"
+    }
+  },
+  "dataset": {
+    "label_source": "rule_derived_prototype",
+    "is_prototype_rule_derived": true,
+    "provenance_note": "Trained on prototype rule-derived multi-criteria labels representing baseline domain heuristics. Distinguished from field-validated ground truth.",
+    "total_samples": 600,
+    "train_samples": 360,
+    "val_samples": 120,
+    "test_samples": 120,
+    "class_distribution": {
+      "LOW": 398,
+      "MEDIUM": 57,
+      "HIGH": 145
+    }
+  },
+  "metrics": {
+    "train": {
+      "accuracy": 1.0,
+      "macro_precision": 1.0,
+      "macro_recall": 1.0,
+      "macro_f1": 1.0,
+      "cohen_kappa": 1.0,
+      "log_loss_value": 0.0074,
+      "per_class_f1": {
+        "LOW": 1.0,
+        "MEDIUM": 1.0,
+        "HIGH": 1.0
+      },
+      "confusion_matrix": [
+        [
+          238,
+          0,
+          0
+        ],
+        [
+          0,
+          35,
+          0
+        ],
+        [
+          0,
+          0,
+          87
+        ]
+      ]
+    },
+    "validation": {
+      "accuracy": 1.0,
+      "macro_precision": 1.0,
+      "macro_recall": 1.0,
+      "macro_f1": 1.0,
+      "cohen_kappa": 1.0,
+      "log_loss_value": 0.0162,
+      "per_class_f1": {
+        "LOW": 1.0,
+        "MEDIUM": 1.0,
+        "HIGH": 1.0
+      },
+      "confusion_matrix": [
+        [
+          80,
+          0,
+          0
+        ],
+        [
+          0,
+          11,
+          0
+        ],
+        [
+          0,
+          0,
+          29
+        ]
+      ]
+    },
+    "test": {
+      "accuracy": 0.9917,
+      "macro_precision": 0.9959,
+      "macro_recall": 0.9697,
+      "macro_f1": 0.9821,
+      "cohen_kappa": 0.9828,
+      "log_loss_value": 0.0364,
+      "per_class_f1": {
+        "LOW": 0.9938,
+        "MEDIUM": 0.9524,
+        "HIGH": 1.0
+      },
+      "confusion_matrix": [
+        [
+          80,
+          0,
+          0
+        ],
+        [
+          1,
+          10,
+          0
+        ],
+        [
+          0,
+          0,
+          29
+        ]
+      ]
+    }
+  },
+  "feature_importances": {
+    "ndvi_diff_mean": 0.233823,
+    "delta_b03_mean": 0.143432,
+    "delta_b02_mean": 0.095385,
+    "large_patch_count": 0.090787,
+    "veg_loss_ha_02": 0.084608,
+    "veg_loss_ha_03": 0.062671,
+    "max_patch_area_ha": 0.062445,
+    "veg_loss_ha_01": 0.057734,
+    "changed_area_ha": 0.044013,
+    "mean_patch_area_ha": 0.035865,
+    "delta_b08_mean": 0.023792,
+    "change_ndvi_diff_std": 0.013701,
+    "ndvi_after_mean": 0.009146,
+    "change_fraction_of_valid": 0.008452,
+    "scl_veg_loss_ha": 0.008155,
+    "change_ndvi_after_mean": 0.008104,
+    "change_ndvi_diff_mean": 0.006491,
+    "veg_loss_fraction": 0.004667,
+    "ndvi_before_mean": 0.004552,
+    "change_ndvi_before_mean": 0.002176,
+    "veg_gain_ha_02": 0.0,
+    "patch_count": 0.0,
+    "patch_density_per_km2": 0.0,
+    "delta_b04_mean": 0.0,
+    "brightness_diff_mean": 0.0
+  },
+  "training_duration_s": 0.28
+}
