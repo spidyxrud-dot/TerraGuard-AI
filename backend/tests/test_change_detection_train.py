@@ -232,7 +232,13 @@ def test_training_is_reproducible_for_a_fixed_seed(train_oscd_root: Path,
 
     first = one_run(tmp_path / "m1")
     second = one_run(tmp_path / "m2")
-    assert first["metrics"]["history"] == second["metrics"]["history"], \
+
+    # Wall-clock duration is intentionally excluded: it is timing, not a metric,
+    # and can never be bit-reproducible. Everything else must match exactly.
+    def metrics_only(history: list[dict]) -> list[dict]:
+        return [{k: v for k, v in row.items() if k != "duration_s"} for row in history]
+
+    assert metrics_only(first["metrics"]["history"]) == metrics_only(second["metrics"]["history"]), \
         "same seed must give identical metrics"
 
 

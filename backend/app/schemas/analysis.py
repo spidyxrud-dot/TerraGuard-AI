@@ -218,9 +218,18 @@ class AnalysisResponse(BaseModel):
 
     error: str | None = None
 
+    persistence_note: str | None = Field(
+        default=None,
+        description=(
+            "Set when database persistence could not be completed (e.g. PostgreSQL "
+            "unreachable). The analysis result itself is unaffected."
+        ),
+    )
+
 
 class HealthResponse(BaseModel):
     status: str
     version: str
     models_loaded: dict[str, bool]
     timestamp: str
+    database: str | None = None
