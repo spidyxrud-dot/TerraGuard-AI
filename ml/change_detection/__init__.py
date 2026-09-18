@@ -26,6 +26,11 @@ _DEFERRED = (
     "read_change_mask",
     "SiameseUNet",
     "SiameseUNetConfig",
+    "EvaluationMetrics",
+    "EvaluationAccumulator",
+    "evaluate_single_pair",
+    "evaluate_dataset",
+    "run_evaluation",
 )
 
 __all__ = list(_DEFERRED)
@@ -36,6 +41,14 @@ def __getattr__(name: str) -> Any:
         from ml.change_detection import model
 
         return getattr(model, name)
+    if name in ("EvaluationMetrics", "EvaluationAccumulator", "evaluate_single_pair", "evaluate_dataset", "run_evaluation"):
+        from ml.change_detection import evaluate
+
+        return getattr(evaluate, name)
+    if name in ("InferenceResult", "predict_pair", "run_inference", "run_inference_raw"):
+        from ml.change_detection import inference
+
+        return getattr(inference, name)
     if name in _DEFERRED:
         from ml.change_detection import dataset
 
