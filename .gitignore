@@ -21,7 +21,8 @@ data/raw/**/*.tiff
 !data/demo/.gitkeep
 
 models/*.pth
-models/*.json
+models/*.pth.tmp
+!models/siamese_unet.json
 
 # Transient runtime artifacts
 *.log
