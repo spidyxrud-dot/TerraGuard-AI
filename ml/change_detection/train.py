@@ -298,7 +298,7 @@ def train_one_epoch(model: SiameseUNet, loader: DataLoader, loss_fn: BCEDiceLoss
         output["loss"].backward()
         optimizer.step()
         # metrics from the same forward that produced the loss (pre-update snapshot)
-        accumulator.add(torch.sigmoid(logits.detach()), target, float(output["loss"]),
+        accumulator.add(torch.sigmoid(logits.detach()), target, float(output["loss"].detach()),
                         threshold)
     return accumulator.metrics()
 
@@ -314,7 +314,7 @@ def run_validation(model: SiameseUNet, loader: DataLoader, loss_fn: BCEDiceLoss,
             before, after, target = _move(sample, device)
             logits = model(before, after)
             output = loss_fn(logits, target)
-            accumulator.add(torch.sigmoid(logits), target, float(output["loss"]), threshold)
+            accumulator.add(torch.sigmoid(logits), target, float(output["loss"].detach()), threshold)
     if was_training:
         model.train()
     return accumulator.metrics()
@@ -368,7 +368,13 @@ class BestCheckpointTracker:
 
     def update(self, epoch: int, metrics: dict, model: SiameseUNet, path: Path,
                metadata: dict) -> bool:
-        value = metrics[self.metric_name]
+        value = metrics.get(self.metric_name)
+        if value is None and self.metric_name.startswith("val_"):
+            value = metrics.get(self.metric_name[4:])
+        if value is None and self.metric_name == "iou":
+            value = metrics.get("val_iou")
+        if value is None:
+            raise KeyError(f"metric {self.metric_name!r} not found in {list(metrics.keys())}")
         if not self.is_better(value):
             return False
         self.best_value = value
