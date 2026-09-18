@@ -71,6 +71,10 @@ class EnvironmentalFeatures:
     total_pixels: int
     valid_pixels: int
     valid_fraction: float
+    total_area_ha: float
+    valid_area_ha: float
+    total_area_km2: float
+    valid_area_km2: float
     changed_pixels: int
     changed_area_m2: float
     changed_area_ha: float
@@ -203,11 +207,16 @@ def extract_environmental_features(
     if valid_mask is not None:
         finite_mask &= (np.asarray(valid_mask).squeeze() > 0)
 
-    # Consider 255 in change_mask as nodata
-    clean_change_mask = (np.asarray(change_mask).squeeze() == 1) & finite_mask
     valid_pixels = int(finite_mask.sum())
     valid_fraction = round(valid_pixels / total_pixels, 6) if total_pixels else 0.0
 
+    total_area_ha = round((total_pixels * pixel_area_m2) / 10_000.0, 4)
+    valid_area_ha = round((valid_pixels * pixel_area_m2) / 10_000.0, 4)
+    total_area_km2 = round(total_area_ha / 100.0, 6)
+    valid_area_km2 = round(valid_area_ha / 100.0, 6)
+
+    # Consider 255 in change_mask as nodata
+    clean_change_mask = (np.asarray(change_mask).squeeze() == 1) & finite_mask
     changed_pixels = int(clean_change_mask.sum())
     changed_area_m2 = round(changed_pixels * pixel_area_m2, 2)
     changed_area_ha = round(changed_area_m2 / 10_000.0, 4)
@@ -314,6 +323,10 @@ def extract_environmental_features(
         total_pixels=total_pixels,
         valid_pixels=valid_pixels,
         valid_fraction=valid_fraction,
+        total_area_ha=total_area_ha,
+        valid_area_ha=valid_area_ha,
+        total_area_km2=total_area_km2,
+        valid_area_km2=valid_area_km2,
         changed_pixels=changed_pixels,
         changed_area_m2=changed_area_m2,
         changed_area_ha=changed_area_ha,

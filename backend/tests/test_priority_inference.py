@@ -19,6 +19,10 @@ def sample_features() -> EnvironmentalFeatures:
         total_pixels=10000,
         valid_pixels=9950,
         valid_fraction=0.995,
+        total_area_ha=10.0,      # 10000 px * 100 m2 / 10000 = 10.0 ha
+        valid_area_ha=9.95,      # 9950 px * 100 m2 / 10000 = 9.95 ha
+        total_area_km2=0.1,      # 10.0 ha / 100
+        valid_area_km2=0.0995,   # 9.95 ha / 100
         changed_pixels=1200,
         changed_area_m2=120000.0,
         changed_area_ha=12.0,

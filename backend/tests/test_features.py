@@ -192,3 +192,81 @@ def test_extract_features_from_processed_directory(tmp_path: Path) -> None:
     assert isinstance(features, EnvironmentalFeatures)
     assert features.changed_pixels == 100
     assert features.changed_area_ha == 1.0
+
+
+def test_changed_area_never_exceeds_valid_aoi_area() -> None:
+    """Regression test proving changed_area <= valid_AOI_area <= total_AOI_area."""
+    shape = (200, 200)
+    total_px = 200 * 200
+
+    # 1. 100% changed AOI with 100% valid pixels
+    change_mask_all = np.ones(shape, dtype=np.uint8)
+    valid_mask_all = np.ones(shape, dtype=bool)
+
+    features = extract_environmental_features(
+        change_mask=change_mask_all,
+        valid_mask=valid_mask_all,
+        pixel_resolution_m=10.0,
+    )
+    assert features.total_pixels == total_px
+    assert features.valid_pixels == total_px
+    assert features.changed_pixels == total_px
+    assert features.changed_area_ha == pytest.approx(features.valid_area_ha)
+    assert features.changed_area_ha <= features.valid_area_ha <= features.total_area_ha
+    assert features.changed_area_km2 <= features.valid_area_km2 <= features.total_area_km2
+    assert features.change_fraction_of_valid == pytest.approx(1.0)
+
+    # 2. 50% cloud/invalid mask, and attempted 100% change mask
+    # Even if change_mask has 1s under clouds, clean_change_mask must filter them out
+    valid_mask_half = np.zeros(shape, dtype=bool)
+    valid_mask_half[:100, :] = True  # Top half valid (20,000 px), bottom half invalid
+
+    features_cloud = extract_environmental_features(
+        change_mask=change_mask_all,
+        valid_mask=valid_mask_half,
+        pixel_resolution_m=10.0,
+    )
+    assert features_cloud.total_pixels == 40000
+    assert features_cloud.valid_pixels == 20000
+    assert features_cloud.changed_pixels == 20000
+    assert features_cloud.changed_area_ha == pytest.approx(200.0)
+    assert features_cloud.valid_area_ha == pytest.approx(200.0)
+    assert features_cloud.total_area_ha == pytest.approx(400.0)
+    assert features_cloud.changed_area_ha <= features_cloud.valid_area_ha <= features_cloud.total_area_ha
+
+
+def test_pune_scale_physical_area_math() -> None:
+    """Validate physical area calculations on exact Sentinel-2 Pune AOI dimensions (1025 x 1025)."""
+    # 1025 x 1025 pixels at 10m resolution
+    # 10,250 m x 10,250 m = 105,062,500 m2 = 10,506.25 ha = 105.0625 km2
+    shape = (1025, 1025)
+    total_px = 1025 * 1025  # 1,050,625 pixels
+
+    # Simulate realistic Pune mask: 212,570 changed pixels out of 1,049,099 valid pixels
+    change_mask = np.zeros(shape, dtype=np.uint8)
+    change_mask.ravel()[:212_570] = 1
+
+    valid_mask = np.zeros(shape, dtype=bool)
+    valid_mask.ravel()[:1_049_099] = True
+
+    features = extract_environmental_features(
+        change_mask=change_mask,
+        valid_mask=valid_mask,
+        pixel_resolution_m=10.0,
+    )
+
+    assert features.total_pixels == 1_050_625
+    assert features.valid_pixels == 1_049_099
+    assert features.total_area_ha == pytest.approx(10_506.25, abs=0.1)
+    assert features.valid_area_ha == pytest.approx(10_490.99, abs=0.1)
+    assert features.total_area_km2 == pytest.approx(105.0625, abs=0.001)
+    assert features.valid_area_km2 == pytest.approx(104.9099, abs=0.001)
+
+    assert features.changed_pixels == 212_570
+    assert features.changed_area_m2 == pytest.approx(21_257_000.0, abs=1.0)
+    assert features.changed_area_ha == pytest.approx(2_125.70, abs=0.01)
+    assert features.changed_area_km2 == pytest.approx(21.2570, abs=0.001)
+
+    assert features.changed_area_ha <= features.valid_area_ha <= features.total_area_ha
+    assert features.change_fraction_of_valid == pytest.approx(212_570 / 1_049_099, abs=1e-5)
+
